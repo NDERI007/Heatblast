@@ -3,18 +3,9 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
+import { Doc } from "@/convex/_generated/dataModel";
 
-// Define what an existing recipe looks like based on our schema
-interface Recipe {
-  _id: Id<"recipes">;
-  title: string;
-  category: string;
-  ingredients: string[];
-  instructions: string[];
-  imageUrl?: string;
-  isFavorite?: boolean;
-}
+export type Recipe = Doc<"recipes">
 
 interface RecipeFormProps {
   initialData?: Recipe; // If provided, we are UPDATING. If missing, we are CREATING.
@@ -25,11 +16,13 @@ export default function RecipeForm({ initialData, onSuccess }: RecipeFormProps) 
   // Convex Mutations
   const createRecipe = useMutation(api.recipe.create);
   const updateRecipe = useMutation(api.recipe.update);
+  const generateUploadUrl = useMutation(api.recipe.generateUploadUrl);
 
   // Form State (Pre-fill if initialData exists, otherwise blank)
   const [title, setTitle] = useState(initialData?.title || "");
   const [category, setCategory] = useState(initialData?.category || "");
-  const [imageUrl, setImageUrl] = useState(initialData?.imageUrl || "");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(initialData?.imageUrl || null)
   
   // Array States: Start with one empty string so the user has a box to type in
   const [ingredients, setIngredients] = useState<string[]>(initialData?.ingredients || [""]);
@@ -49,32 +42,53 @@ export default function RecipeForm({ initialData, onSuccess }: RecipeFormProps) 
     setter((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // --- Submit Handler ---
-  const handleSubmit = async (e: React.FormEvent) => {
+ // --- Submit Handler ---
+  const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Clean up empty strings before saving
     const cleanIngredients = ingredients.filter((i) => i.trim() !== "");
     const cleanInstructions = instructions.filter((i) => i.trim() !== "");
 
     try {
+      let finalImageUrl = initialData?.imageUrl; // Default to existing URL if editing
+
+      // If the user selected a NEW file, upload it first
+      if (imageFile) {
+        // 1. Get the upload URL from Convex
+        const postUrl = await generateUploadUrl();
+
+        // 2. Post the file to the URL
+        const result = await fetch(postUrl, {
+          method: "POST",
+          headers: { "Content-Type": imageFile.type },
+          body: imageFile,
+        });
+        
+        // 3. Get the storage ID back
+        const { storageId } = await result.json();
+
+        // 4. (Optional but easiest for your current schema) 
+        // Construct the Convex URL to save in your database
+        const convexDomain = process.env.NEXT_PUBLIC_CONVEX_URL; 
+        finalImageUrl = `${convexDomain}/api/storage/${storageId}`;
+      }
+
+      // Now save to the database as usual, but use finalImageUrl
       if (initialData?._id) {
-        // UPDATE Existing Recipe
         await updateRecipe({
           id: initialData._id,
           title,
           category,
-          imageUrl: imageUrl || undefined,
+          imageUrl: finalImageUrl, // Use the new uploaded URL (or keep the old one)
           ingredients: cleanIngredients,
           instructions: cleanInstructions,
         });
       } else {
-        // CREATE New Recipe
         await createRecipe({
           title,
           category,
-          imageUrl: imageUrl || undefined,
+          imageUrl: finalImageUrl, // Use the new uploaded URL
           ingredients: cleanIngredients,
           instructions: cleanInstructions,
         });
@@ -110,8 +124,22 @@ export default function RecipeForm({ initialData, onSuccess }: RecipeFormProps) 
 
       <div className="space-y-2">
         <label className="text-sm font-medium">Image URL (Optional)</label>
-        <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
-          className="w-full p-2 border rounded-md" placeholder="https://..." />
+        <input type="file" accept="image/*" onChange={(e) => {const file = e.target.files?.[0];
+          if (file){ setImageFile(file) 
+            // Create a temporary local URL to show a preview immediately
+              setImagePreview(URL.createObjectURL(file));}}
+        }
+          className="w-full p-2 border rounded-md file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+          {/* Show the preview if an image exists or was just selected */}
+        {imagePreview && (
+          <div className="mt-4 relative w-full max-w-sm h-48">
+            <img 
+              src={imagePreview} 
+              alt="Recipe preview" 
+              className="w-full h-full object-cover rounded-xl shadow-sm border"
+            />
+          </div>
+        )}
       </div>
 
       {/* --- Dynamic Ingredients List --- */}

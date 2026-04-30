@@ -1,6 +1,9 @@
-// convex/recipes.ts
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+
+export const generateUploadUrl  = mutation(async (ctx) => {
+  return await ctx.storage.generateUploadUrl();
+})
 
 // READ: Get all recipes in the database
 export const get = query({
