@@ -22,7 +22,7 @@ export default function RecipeForm({ initialData, onSuccess }: RecipeFormProps) 
   const [title, setTitle] = useState(initialData?.title || "");
   const [category, setCategory] = useState(initialData?.category || "");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(initialData?.imageUrl || null)
+  const [imagePreview, setImagePreview] = useState<string | null>(initialData?.imageId || null)
   
   // Array States: Start with one empty string so the user has a box to type in
   const [ingredients, setIngredients] = useState<string[]>(initialData?.ingredients || [""]);
@@ -51,7 +51,7 @@ export default function RecipeForm({ initialData, onSuccess }: RecipeFormProps) 
     const cleanInstructions = instructions.filter((i) => i.trim() !== "");
 
     try {
-      let finalImageUrl = initialData?.imageUrl; // Default to existing URL if editing
+      let finalImageId = initialData?.imageId;
 
       // If the user selected a NEW file, upload it first
       if (imageFile) {
@@ -68,19 +68,15 @@ export default function RecipeForm({ initialData, onSuccess }: RecipeFormProps) 
         // 3. Get the storage ID back
         const { storageId } = await result.json();
 
-        // 4. (Optional but easiest for your current schema) 
-        // Construct the Convex URL to save in your database
-        const convexDomain = process.env.NEXT_PUBLIC_CONVEX_URL; 
-        finalImageUrl = `${convexDomain}/api/storage/${storageId}`;
+        finalImageId = storageId;
       }
 
-      // Now save to the database as usual, but use finalImageUrl
       if (initialData?._id) {
         await updateRecipe({
           id: initialData._id,
           title,
           category,
-          imageUrl: finalImageUrl, // Use the new uploaded URL (or keep the old one)
+          imageId: finalImageId,
           ingredients: cleanIngredients,
           instructions: cleanInstructions,
         });
@@ -88,7 +84,7 @@ export default function RecipeForm({ initialData, onSuccess }: RecipeFormProps) 
         await createRecipe({
           title,
           category,
-          imageUrl: finalImageUrl, // Use the new uploaded URL
+          imageId: finalImageId, // Use the new uploaded URL
           ingredients: cleanIngredients,
           instructions: cleanInstructions,
         });

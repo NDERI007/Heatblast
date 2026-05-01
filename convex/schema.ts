@@ -10,8 +10,9 @@ export default defineSchema({
     category: v.string(),
     
     
-    imageUrl: v.optional(v.string()),
+    imageId: v.optional(v.id("_storage")),
     isFavorite: v.optional(v.boolean()),
+    externalImageUrl: v.optional(v.string()),
     
     // The Clerk user ID (Mandatory for security)
    // userId: v.string(), 
